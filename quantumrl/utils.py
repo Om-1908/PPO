@@ -230,9 +230,91 @@ def plot_training_curves(
     print(f"[utils] Training curve saved -> {save_path}")
 
 
+def plot_simultaneous_curves(
+    dqn_log_path: str,
+    ppo_log_path: str,
+    save_path: str,
+    window: int = 50,
+) -> None:
+    """
+    Plot combined training diagnostic curves comparing DQN and PPO simultaneously.
+
+    Plots 3 panels:
+      1. Episode Reward (DQN vs PPO)
+      2. Final Fidelity (DQN vs PPO)
+      3. Gate Count per Episode (DQN vs PPO)
+    """
+    os.makedirs(os.path.dirname(save_path) if os.path.dirname(save_path) else '.', exist_ok=True)
+
+    dqn_data = load_logs(dqn_log_path) if os.path.exists(dqn_log_path) else None
+    ppo_data = load_logs(ppo_log_path) if os.path.exists(ppo_log_path) else None
+
+    if not dqn_data and not ppo_data:
+        print("[utils] Neither DQN nor PPO log file exists for simultaneous plot.")
+        return
+
+    fig, axes = plt.subplots(3, 1, figsize=(11, 13))
+    fig.patch.set_facecolor('#1a1a2e')
+
+    metrics = [
+        ('rewards',    'Episode Reward',    'Reward'),
+        ('fidelities', 'Final Fidelity',    'Fidelity'),
+        ('steps',      'Gates per Episode', 'Gate Count'),
+    ]
+
+    dqn_color = '#e94560'
+    ppo_color = '#0f9b8e'
+
+    for ax, (key, title, ylabel) in zip(axes, metrics):
+        ax.set_facecolor('#16213e')
+
+        if dqn_data and key in dqn_data and len(dqn_data[key]) > 0:
+            data = dqn_data[key]
+            episodes = np.arange(1, len(data) + 1)
+            ax.plot(episodes, data, alpha=0.2, color=dqn_color, linewidth=0.6)
+            if len(data) >= window:
+                rolled = _rolling_mean(data, window=window)
+                offset = len(data) - len(rolled)
+                ax.plot(np.arange(offset + 1, len(data) + 1), rolled, color=dqn_color, linewidth=2.0, label='DQN (Rolling 50)')
+            else:
+                ax.plot(episodes, data, color=dqn_color, linewidth=1.5, label='DQN')
+
+        if ppo_data and key in ppo_data and len(ppo_data[key]) > 0:
+            data = ppo_data[key]
+            episodes = np.arange(1, len(data) + 1)
+            ax.plot(episodes, data, alpha=0.2, color=ppo_color, linewidth=0.6)
+            if len(data) >= window:
+                rolled = _rolling_mean(data, window=window)
+                offset = len(data) - len(rolled)
+                ax.plot(np.arange(offset + 1, len(data) + 1), rolled, color=ppo_color, linewidth=2.0, label='PPO (Rolling 50)')
+            else:
+                ax.plot(episodes, data, color=ppo_color, linewidth=1.5, label='PPO')
+
+        if key == 'fidelities':
+            ax.axhline(0.99, color='#00ff88', linestyle='--', linewidth=1.2, alpha=0.7, label='Target Fidelity (0.99)')
+            ax.set_ylim(-0.02, 1.05)
+
+        ax.set_title(title, color='white', fontsize=13, fontweight='bold')
+        ax.set_xlabel('Episode', color='#aaaaaa', fontsize=10)
+        ax.set_ylabel(ylabel, color='#aaaaaa', fontsize=10)
+        ax.tick_params(colors='#aaaaaa')
+        ax.spines['bottom'].set_color('#444')
+        ax.spines['top'].set_color('#444')
+        ax.spines['left'].set_color('#444')
+        ax.spines['right'].set_color('#444')
+        ax.legend(facecolor='#1a1a2e', edgecolor='#444', labelcolor='white', loc='best')
+        ax.grid(True, alpha=0.2, color='#444')
+
+    plt.tight_layout(pad=2.0)
+    plt.savefig(save_path, dpi=150, bbox_inches='tight', facecolor=fig.get_facecolor())
+    plt.close(fig)
+    print(f"[utils] Simultaneous comparison curve saved -> {save_path}")
+
+
 # ─────────────────────────────────────────────────────────
 # Logging
 # ─────────────────────────────────────────────────────────
+
 
 def save_logs(logs_dict: dict, filepath: str) -> None:
     """

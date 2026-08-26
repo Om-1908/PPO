@@ -15,7 +15,7 @@ _current_dir = os.path.dirname(os.path.abspath(__file__))
 if _current_dir not in sys.path:
     sys.path.insert(0, _current_dir)
 
-from configs.config_1qubit import Config  # ACTIVE CONFIG — change this import line to switch qubit count
-# from configs.config_2qubit import Config
+from configs.config_2qubit import Config  # ACTIVE CONFIG — 2-qubit production
+# from configs.config_1qubit import Config
 
 __all__ = ['Config']

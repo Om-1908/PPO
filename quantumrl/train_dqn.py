@@ -23,7 +23,9 @@ from quantum_env import QuantumCircuitEnv
 from utils import (
     best_checkpoint_path,
     generate_random_statevector,
+    load_logs,
     plot_training_curves,
+    plot_simultaneous_curves,
     save_logs,
 )
 
@@ -87,6 +89,8 @@ def _greedy_eval_dqn(
 def train_dqn(config: Config) -> None:
     """Full DQN training loop for QuantumRL."""
     set_seeds(config.SEED)
+    num_cpus = os.cpu_count() or 8
+    torch.set_num_threads(num_cpus)
 
     env = QuantumCircuitEnv(config)
     obs_size = env.observation_space.shape[0]
@@ -95,7 +99,7 @@ def train_dqn(config: Config) -> None:
     print(f"[DQN] Training configuration: {config.NUM_QUBITS} Qubit(s)")
     print(f"[DQN] obs_size={obs_size}  action_size={action_size}")
     agent = DQNAgent(obs_size, action_size, config)
-    print(f"[DQN] Training device: {agent.device}")
+    print(f"[DQN] Training device: {agent.device} (PyTorch threads: {torch.get_num_threads()})")
 
     # Checkpoint save guard
     if os.path.exists(config.DQN_MODEL_PATH):
@@ -108,9 +112,10 @@ def train_dqn(config: Config) -> None:
     best_path = best_checkpoint_path(config.DQN_MODEL_PATH)
 
     eval_interval = getattr(config, 'BEST_CHECKPOINT_EVAL_INTERVAL', 1000)
+    update_freq = getattr(config, 'DQN_UPDATE_FREQ', 4)
     print(
         f"[DQN] Best-checkpoint eval every {eval_interval} episodes "
-        f"({getattr(config, 'BEST_CHECKPOINT_EVAL_STATES', 50)} states each)."
+        f"({getattr(config, 'BEST_CHECKPOINT_EVAL_STATES', 50)} states each). Update freq: every {update_freq} steps."
     )
 
     # Replay buffer warm-up
@@ -137,23 +142,45 @@ def train_dqn(config: Config) -> None:
     # Best-checkpoint tracking
     best_eval_fidelity: float = float('-inf')
     best_eval_episode: int = -1
+    total_steps: int = 0
+    start_episode: int = 0
 
-    print(f"[DQN] Starting training for {config.DQN_EPISODES} episodes ...\n")
+    log_path = os.path.join(config.LOG_DIR, 'dqn_logs.json')
+    if os.path.exists(config.DQN_MODEL_PATH) and os.path.exists(log_path):
+        try:
+            agent.load(config.DQN_MODEL_PATH)
+            logs = load_logs(log_path)
+            if logs and 'rewards' in logs and len(logs['rewards']) > 0:
+                episode_rewards = list(logs['rewards'])
+                episode_fidelities = list(logs['fidelities'])
+                episode_steps = list(logs['steps'])
+                start_episode = len(episode_rewards)
+                agent.epsilon = max(
+                    config.DQN_EPSILON_END,
+                    config.DQN_EPSILON_START * (config.DQN_EPSILON_DECAY ** start_episode)
+                )
+                print(f"[DQN] Resuming training from Episode {start_episode} (loaded {len(episode_rewards)} past episodes, Epsilon={agent.epsilon:.3f})")
+        except Exception as e:
+            print(f"[DQN] Could not load resume checkpoint: {e}")
 
-    for episode in range(config.DQN_EPISODES):
+    print(f"[DQN] Starting training for {config.DQN_EPISODES} episodes (from {start_episode}) ...\n")
+
+    for episode in range(start_episode, config.DQN_EPISODES):
         obs, _ = env.reset()
         episode_reward = 0.0
         done = False
         info = {'fidelity': 0.0, 'steps': 0}
 
         while not done:
+            total_steps += 1
             action = agent.select_action(obs)
             action_counts[action] += 1
             next_obs, reward, terminated, truncated, info = env.step(action)
             done = terminated or truncated
 
             agent.buffer.push(obs, action, reward, next_obs, float(done))
-            agent.update()
+            if total_steps % update_freq == 0:
+                agent.update()
 
             obs = next_obs
             episode_reward += reward
@@ -167,7 +194,7 @@ def train_dqn(config: Config) -> None:
         episode_fidelities.append(info['fidelity'])
         episode_steps.append(info['steps'])
 
-        # ── Per-100-episode progress print (training curve metric) ────────────
+        # ── Per-100-episode progress print & live plot update ────────────
         if (episode + 1) % 100 == 0:
             mean_fid = float(np.mean(episode_fidelities[-100:]))
             print(
@@ -176,7 +203,31 @@ def train_dqn(config: Config) -> None:
                 f"Fidelity: {info['fidelity']:.4f} | "
                 f"Steps: {info['steps']:2d} | "
                 f"Epsilon: {agent.epsilon:.3f} | "
-                f"Mean Fid (100): {mean_fid:.4f}"
+                f"Mean Fid (100): {mean_fid:.4f}",
+                flush=True,
+            )
+
+            # Periodic live log & plot update (every 100 episodes)
+            os.makedirs(config.LOG_DIR, exist_ok=True)
+            save_logs(
+                {
+                    'rewards': episode_rewards,
+                    'fidelities': episode_fidelities,
+                    'steps': episode_steps,
+                },
+                os.path.join(config.LOG_DIR, 'dqn_logs.json'),
+            )
+            os.makedirs(config.PLOT_DIR, exist_ok=True)
+            plot_training_curves(
+                episode_rewards,
+                episode_fidelities,
+                episode_steps,
+                os.path.join(config.PLOT_DIR, 'dqn_training.png'),
+            )
+            plot_simultaneous_curves(
+                os.path.join(config.LOG_DIR, 'dqn_logs.json'),
+                getattr(config, 'PPO_LOG_PATH', os.path.join(config.LOG_DIR, 'ppo_logs.json')),
+                os.path.join(config.PLOT_DIR, 'simultaneous_dqn_ppo.png'),
             )
 
         # ── Periodic greedy evaluation for best-checkpoint tracking ──────────

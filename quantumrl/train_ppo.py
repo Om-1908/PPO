@@ -25,7 +25,9 @@ from quantum_env import QuantumCircuitEnv
 from utils import (
     best_checkpoint_path,
     generate_random_statevector,
+    load_logs,
     plot_training_curves,
+    plot_simultaneous_curves,
     save_logs,
 )
 
@@ -85,9 +87,11 @@ def _greedy_eval_ppo(
 def train_ppo(config: Config) -> None:
     """Main training loop for PPO agent in QuantumRL."""
     set_seeds(config.SEED)
+    num_cpus = os.cpu_count() or 8
+    torch.set_num_threads(num_cpus)
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    print(f"[PPO] Training Device: {device}")
+    print(f"[PPO] Training Device: {device} (PyTorch threads: {torch.get_num_threads()})")
     if torch.cuda.is_available():
         gpu_name = torch.cuda.get_device_name(0)
         print(f"[PPO] GPU Detected   : {gpu_name}")
@@ -126,15 +130,32 @@ def train_ppo(config: Config) -> None:
     # Best-checkpoint tracking
     best_eval_fidelity: float = float('-inf')
     best_eval_episode: int = -1
+    current_episode = 0
 
-    print(f"[PPO] Starting training for {config.PPO_EPISODES} episodes ...\n")
+    if os.path.exists(config.PPO_MODEL_PATH) and os.path.exists(config.PPO_LOG_PATH):
+        try:
+            agent.load(config.PPO_MODEL_PATH)
+            agent.ac.train()
+            logs = load_logs(config.PPO_LOG_PATH)
+            if logs and 'rewards' in logs and len(logs['rewards']) > 0:
+                episode_rewards = list(logs['rewards'])
+                episode_fidelities = list(logs['fidelities'])
+                episode_steps_list = list(logs['steps'])
+                current_episode = len(episode_rewards)
+                if agent.scheduler is not None:
+                    for _ in range(current_episode):
+                        agent.scheduler.step()
+                print(f"[PPO] Resuming training from Episode {current_episode} (loaded {len(episode_rewards)} past episodes)")
+        except Exception as e:
+            print(f"[PPO] Could not load resume checkpoint: {e}")
+
+    print(f"[PPO] Starting training for {config.PPO_EPISODES} episodes (from {current_episode}) ...\n")
 
     obs, _ = env.reset()
     obs_t = torch.FloatTensor(obs).to(device)
 
     episode_reward = 0.0
     episode_steps = 0
-    current_episode = 0
 
     while current_episode < config.PPO_EPISODES:
 
@@ -166,7 +187,7 @@ def train_ppo(config: Config) -> None:
                 obs, _ = env.reset()
                 obs_t = torch.FloatTensor(obs).to(device)
 
-                # ── Per-100-episode progress print ────────────────────────────
+                # ── Per-100-episode progress print & live plot update ────────────
                 if current_episode % 100 == 0:
                     mean_fid = float(np.mean(episode_fidelities[-100:]))
                     current_lr = agent.optimizer.param_groups[0]['lr']
@@ -178,6 +199,29 @@ def train_ppo(config: Config) -> None:
                         f"LR: {current_lr:.2e} | "
                         f"Mean Fid (100): {mean_fid:.4f}",
                         flush=True,
+                    )
+
+                    # Periodic live log & plot update (every 100 episodes)
+                    os.makedirs(config.LOG_DIR, exist_ok=True)
+                    save_logs(
+                        {
+                            'rewards': episode_rewards,
+                            'fidelities': episode_fidelities,
+                            'steps': episode_steps_list,
+                        },
+                        config.PPO_LOG_PATH,
+                    )
+                    os.makedirs(config.PLOT_DIR, exist_ok=True)
+                    plot_training_curves(
+                        episode_rewards,
+                        episode_fidelities,
+                        episode_steps_list,
+                        config.PPO_PLOT_PATH,
+                    )
+                    plot_simultaneous_curves(
+                        os.path.join(config.LOG_DIR, 'dqn_logs.json'),
+                        config.PPO_LOG_PATH,
+                        os.path.join(config.PLOT_DIR, 'simultaneous_dqn_ppo.png'),
                     )
 
                 # ── Periodic greedy evaluation for best-checkpoint tracking ──
