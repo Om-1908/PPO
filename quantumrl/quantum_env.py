@@ -33,9 +33,38 @@ import gymnasium
 from gymnasium import spaces
 
 from qiskit import QuantumCircuit
-from qiskit.quantum_info import Statevector
 
 from utils import compute_fidelity
+
+# Precomputed fixed 2x2 gate matrices
+_H_MAT = (1.0 / np.sqrt(2.0)) * np.array([[1.0, 1.0], [1.0, -1.0]], dtype=np.complex128)
+_X_MAT = np.array([[0.0, 1.0], [1.0, 0.0]], dtype=np.complex128)
+_Y_MAT = np.array([[0.0, -1j], [1j, 0.0]], dtype=np.complex128)
+_Z_MAT = np.array([[1.0, 0.0], [0.0, -1.0]], dtype=np.complex128)
+
+
+def _rx_mat(angle: float) -> np.ndarray:
+    half = angle / 2.0
+    return np.array(
+        [[np.cos(half), -1j * np.sin(half)], [-1j * np.sin(half), np.cos(half)]],
+        dtype=np.complex128,
+    )
+
+
+def _ry_mat(angle: float) -> np.ndarray:
+    half = angle / 2.0
+    return np.array(
+        [[np.cos(half), -np.sin(half)], [np.sin(half), np.cos(half)]],
+        dtype=np.complex128,
+    )
+
+
+def _rz_mat(angle: float) -> np.ndarray:
+    half = angle / 2.0
+    return np.array(
+        [[np.exp(-1j * half), 0.0], [0.0, np.exp(1j * half)]],
+        dtype=np.complex128,
+    )
 
 
 class QuantumCircuitEnv(gymnasium.Env):
@@ -88,10 +117,34 @@ class QuantumCircuitEnv(gymnasium.Env):
 
         self._fixed_target_sv: Optional[np.ndarray] = target_sv
         self.target_sv: Optional[np.ndarray] = None
-        self.current_circuit: Optional[QuantumCircuit] = None
         self.current_sv: Optional[np.ndarray] = None
+        self.applied_actions: List[Tuple] = []
         self.steps: int = 0
         self.prev_fidelity: float = 0.0
+
+    @property
+    def current_circuit(self) -> QuantumCircuit:
+        """Reconstruct Qiskit QuantumCircuit on demand for rendering/export."""
+        circ = QuantumCircuit(self.n_qubits)
+        for gate_name, qubit_or_pair, angle in self.applied_actions:
+            if gate_name == 'H':
+                circ.h(qubit_or_pair)
+            elif gate_name == 'X':
+                circ.x(qubit_or_pair)
+            elif gate_name == 'Y':
+                circ.y(qubit_or_pair)
+            elif gate_name == 'Z':
+                circ.z(qubit_or_pair)
+            elif gate_name == 'RX':
+                circ.rx(angle, qubit_or_pair)
+            elif gate_name == 'RY':
+                circ.ry(angle, qubit_or_pair)
+            elif gate_name == 'RZ':
+                circ.rz(angle, qubit_or_pair)
+            elif gate_name == 'CNOT':
+                ctrl, tgt = qubit_or_pair
+                circ.cx(ctrl, tgt)
+        return circ
 
     def _build_action_list(self) -> List[Tuple]:
         """
@@ -126,27 +179,56 @@ class QuantumCircuitEnv(gymnasium.Env):
 
         return actions
 
-    def _apply_gate(self, gate_name: str, qubit_or_pair, angle: Optional[float]) -> None:
-        """Apply a named gate to self.current_circuit."""
-        circ = self.current_circuit
+    def _apply_1q_gate_numpy(self, gate_mat: np.ndarray, qubit: int) -> None:
+        """Apply 2x2 gate matrix to in-memory statevector via tensor contraction."""
+        axis = self.n_qubits - 1 - qubit
+        shape = [2] * self.n_qubits
+        T = self.current_sv.reshape(shape)
+        T_new = np.tensordot(gate_mat, T, axes=([1], [axis]))
+        axes_order = list(range(1, axis + 1)) + [0] + list(range(axis + 1, self.n_qubits))
+        T_new = np.transpose(T_new, axes_order)
+        self.current_sv = T_new.reshape(-1)
 
+    def _apply_cnot_numpy(self, ctrl: int, tgt: int) -> None:
+        """Apply CNOT by swapping target qubit amplitudes where control qubit is |1⟩."""
+        ctrl_axis = self.n_qubits - 1 - ctrl
+        tgt_axis = self.n_qubits - 1 - tgt
+        shape = [2] * self.n_qubits
+        T = self.current_sv.reshape(shape).copy()
+
+        ctrl_slice = [slice(None)] * self.n_qubits
+        ctrl_slice[ctrl_axis] = 1
+
+        tgt_slice_0 = list(ctrl_slice)
+        tgt_slice_0[tgt_axis] = 0
+        tgt_slice_1 = list(ctrl_slice)
+        tgt_slice_1[tgt_axis] = 1
+
+        val0 = T[tuple(tgt_slice_0)].copy()
+        val1 = T[tuple(tgt_slice_1)].copy()
+        T[tuple(tgt_slice_0)] = val1
+        T[tuple(tgt_slice_1)] = val0
+        self.current_sv = T.reshape(-1)
+
+    def _apply_gate(self, gate_name: str, qubit_or_pair, angle: Optional[float]) -> None:
+        """Apply gate incrementally to in-memory statevector."""
         if gate_name == 'H':
-            circ.h(qubit_or_pair)
+            self._apply_1q_gate_numpy(_H_MAT, qubit_or_pair)
         elif gate_name == 'X':
-            circ.x(qubit_or_pair)
+            self._apply_1q_gate_numpy(_X_MAT, qubit_or_pair)
         elif gate_name == 'Y':
-            circ.y(qubit_or_pair)
+            self._apply_1q_gate_numpy(_Y_MAT, qubit_or_pair)
         elif gate_name == 'Z':
-            circ.z(qubit_or_pair)
+            self._apply_1q_gate_numpy(_Z_MAT, qubit_or_pair)
         elif gate_name == 'RX':
-            circ.rx(angle, qubit_or_pair)
+            self._apply_1q_gate_numpy(_rx_mat(angle), qubit_or_pair)
         elif gate_name == 'RY':
-            circ.ry(angle, qubit_or_pair)
+            self._apply_1q_gate_numpy(_ry_mat(angle), qubit_or_pair)
         elif gate_name == 'RZ':
-            circ.rz(angle, qubit_or_pair)
+            self._apply_1q_gate_numpy(_rz_mat(angle), qubit_or_pair)
         elif gate_name == 'CNOT':
             ctrl, tgt = qubit_or_pair
-            circ.cx(ctrl, tgt)
+            self._apply_cnot_numpy(ctrl, tgt)
         else:
             raise ValueError(f"Unknown gate: {gate_name}")
 
@@ -164,7 +246,7 @@ class QuantumCircuitEnv(gymnasium.Env):
         return obs
 
     def _random_target(self) -> np.ndarray:
-        """Generate a Haar-random 2-qubit statevector (normalized complex128, dim=4)."""
+        """Generate a Haar-random n-qubit statevector (normalized complex128, dim=2^n)."""
         dim = 2 ** self.n_qubits
         sv = np.random.randn(dim) + 1j * np.random.randn(dim)
         return (sv / np.linalg.norm(sv)).astype(np.complex128)
@@ -175,7 +257,7 @@ class QuantumCircuitEnv(gymnasium.Env):
         target_sv: Optional[np.ndarray] = None,
         options: Optional[dict] = None,
     ) -> Tuple[np.ndarray, dict]:
-        """Reset environment to ground state |00⟩."""
+        """Reset environment to ground state |0...0⟩."""
         super().reset(seed=seed)
 
         if target_sv is not None:
@@ -185,10 +267,10 @@ class QuantumCircuitEnv(gymnasium.Env):
         else:
             self.target_sv = self._random_target()
 
-        self.current_circuit = QuantumCircuit(self.n_qubits)
-        self.current_sv = (
-            Statevector.from_label('0' * self.n_qubits).data.astype(np.complex128)
-        )
+        self.applied_actions = []
+        dim = 2 ** self.n_qubits
+        self.current_sv = np.zeros(dim, dtype=np.complex128)
+        self.current_sv[0] = 1.0
 
         self.steps = 0
         self.prev_fidelity = 0.0
@@ -202,10 +284,8 @@ class QuantumCircuitEnv(gymnasium.Env):
         """Apply gate action and return (obs, reward, terminated, truncated, info)."""
         gate_name, qubit_or_pair, angle = self.action_list[action]
 
+        self.applied_actions.append((gate_name, qubit_or_pair, angle))
         self._apply_gate(gate_name, qubit_or_pair, angle)
-
-        sv_obj = Statevector(self.current_circuit)
-        self.current_sv = sv_obj.data.astype(np.complex128)
 
         fidelity = compute_fidelity(self.target_sv, self.current_sv)
         self.steps += 1
@@ -231,10 +311,22 @@ class QuantumCircuitEnv(gymnasium.Env):
 
     def render(self) -> None:
         """Print text representation of the quantum circuit."""
-        if self.current_circuit is not None:
-            print(self.current_circuit.draw('text'))
+        circ = self.current_circuit
+        if circ is not None:
+            try:
+                print(circ.draw('text'))
+            except (UnicodeEncodeError, Exception):
+                try:
+                    import sys
+                    text_draw = str(circ.draw('text'))
+                    sys.stdout.buffer.write(text_draw.encode('utf-8'))
+                    sys.stdout.buffer.write(b'\n')
+                    sys.stdout.flush()
+                except Exception:
+                    print("[QuantumCircuitEnv] (Circuit diagram rendered with UTF-8 fallback)")
         else:
             print("[QuantumCircuitEnv] Circuit not initialized.")
 
     def close(self) -> None:
         pass
+

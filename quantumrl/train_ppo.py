@@ -91,10 +91,11 @@ def train_ppo(config: Config) -> None:
     torch.set_num_threads(num_cpus)
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    print(f"[PPO] Training Device: {device} (PyTorch threads: {torch.get_num_threads()})")
     if torch.cuda.is_available():
         gpu_name = torch.cuda.get_device_name(0)
-        print(f"[PPO] GPU Detected   : {gpu_name}")
+        print(f"[train_ppo] Using device: cuda ({gpu_name}) (PyTorch threads: {torch.get_num_threads()})")
+    else:
+        print(f"[train_ppo] WARNING: Using device: cpu — GPU not detected or PyTorch CPU-only build installed (PyTorch threads: {torch.get_num_threads()})")
 
     env = QuantumCircuitEnv(config)
     obs_size = env.observation_space.shape[0]

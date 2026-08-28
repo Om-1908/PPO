@@ -99,7 +99,11 @@ def train_dqn(config: Config) -> None:
     print(f"[DQN] Training configuration: {config.NUM_QUBITS} Qubit(s)")
     print(f"[DQN] obs_size={obs_size}  action_size={action_size}")
     agent = DQNAgent(obs_size, action_size, config)
-    print(f"[DQN] Training device: {agent.device} (PyTorch threads: {torch.get_num_threads()})")
+    if torch.cuda.is_available():
+        gpu_name = torch.cuda.get_device_name(0)
+        print(f"[train_dqn] Using device: cuda ({gpu_name}) (PyTorch threads: {torch.get_num_threads()})")
+    else:
+        print(f"[train_dqn] WARNING: Using device: cpu — GPU not detected or PyTorch CPU-only build installed (PyTorch threads: {torch.get_num_threads()})")
 
     # Checkpoint save guard
     if os.path.exists(config.DQN_MODEL_PATH):

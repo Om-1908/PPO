@@ -167,3 +167,122 @@ class TestIntegration:
         action, log_prob, entropy, value = agent.select_action(torch.FloatTensor(obs).to(device))
         next_obs, reward, terminated, truncated, info = env.step(action)
         assert isinstance(action, int)
+
+
+class TestQuantumRegression:
+    """
+    Mandatory regression test verifying that the NumPy incremental simulation
+    matches Qiskit's reference Statevector to 1e-10 precision across all gate types
+    and both CNOT control/target directions.
+    """
+
+    def test_1qubit_gate_sequence_regression(self):
+        from qiskit import QuantumCircuit
+
+        cfg = Config()
+        cfg.NUM_QUBITS = 1
+        cfg.GATES = ['H', 'X', 'Y', 'Z', 'RX', 'RY', 'RZ']
+        env = QuantumCircuitEnv(cfg)
+        env.reset()
+
+        a1 = env.rotation_angles[1]
+        a2 = env.rotation_angles[3]
+        a3 = env.rotation_angles[5]
+
+        # Hand-picked sequence covering every 1-qubit gate type
+        actions_to_apply = [
+            ('H', 0, None),
+            ('X', 0, None),
+            ('Y', 0, None),
+            ('Z', 0, None),
+            ('RX', 0, a1),
+            ('RY', 0, a2),
+            ('RZ', 0, a3),
+        ]
+
+        # 1. Reference output via Qiskit
+        qc = QuantumCircuit(1)
+        qc.h(0)
+        qc.x(0)
+        qc.y(0)
+        qc.z(0)
+        qc.rx(a1, 0)
+        qc.ry(a2, 0)
+        qc.rz(a3, 0)
+        reference_sv = Statevector(qc).data.astype(np.complex128)
+
+        # 2. NumPy incremental output via env
+        for gate_name, q, angle in actions_to_apply:
+            action_idx = env.action_list.index((gate_name, q, angle))
+            env.step(action_idx)
+
+        numpy_sv = env.current_sv
+
+        # 3. Precision assertion
+        assert np.allclose(reference_sv, numpy_sv, atol=1e-10), (
+            f"1-qubit simulation mismatch:\n"
+            f"Qiskit: {reference_sv}\n"
+            f"NumPy : {numpy_sv}"
+        )
+
+    def test_2qubit_gate_sequence_regression(self):
+        from qiskit import QuantumCircuit
+
+        cfg = Config()
+        cfg.NUM_QUBITS = 2
+        cfg.GATES = ['H', 'X', 'Y', 'Z', 'RX', 'RY', 'RZ', 'CNOT']
+        env = QuantumCircuitEnv(cfg)
+        env.reset()
+
+        a1 = env.rotation_angles[1]
+        a2 = env.rotation_angles[2]
+        a3 = env.rotation_angles[4]
+        a4 = env.rotation_angles[6]
+
+        # Hand-picked sequence covering all gate types and BOTH CNOT directions
+        actions_to_apply = [
+            ('H', 0, None),
+            ('X', 1, None),
+            ('Y', 0, None),
+            ('Z', 1, None),
+            ('RX', 0, a1),
+            ('RY', 1, a2),
+            ('RZ', 0, a3),
+            ('CNOT', (0, 1), None),  # CNOT ctrl=0, tgt=1
+            ('H', 1, None),
+            ('RY', 0, a4),
+            ('CNOT', (1, 0), None),  # CNOT ctrl=1, tgt=0
+            ('RZ', 1, a1),
+        ]
+
+        # 1. Reference output via Qiskit
+        qc = QuantumCircuit(2)
+        qc.h(0)
+        qc.x(1)
+        qc.y(0)
+        qc.z(1)
+        qc.rx(a1, 0)
+        qc.ry(a2, 1)
+        qc.rz(a3, 0)
+        qc.cx(0, 1)
+        qc.h(1)
+        qc.ry(a4, 0)
+        qc.cx(1, 0)
+        qc.rz(a1, 1)
+        reference_sv = Statevector(qc).data.astype(np.complex128)
+
+        # 2. NumPy incremental output via env
+        for gate_name, qubit_or_pair, angle in actions_to_apply:
+            action_idx = env.action_list.index((gate_name, qubit_or_pair, angle))
+            env.step(action_idx)
+
+        numpy_sv = env.current_sv
+
+        # 3. Precision assertion
+        assert np.allclose(reference_sv, numpy_sv, atol=1e-10), (
+            f"2-qubit simulation mismatch:\n"
+            f"Qiskit: {reference_sv}\n"
+            f"NumPy : {numpy_sv}"
+        )
+
+
