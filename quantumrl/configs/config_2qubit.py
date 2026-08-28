@@ -40,7 +40,7 @@ class Config:
     # ──────────────────────────────────────────────
     # DQN Hyperparameters (2-Qubit Scaled + Dueling + PER)
     # ──────────────────────────────────────────────
-    DQN_EPISODES: int = 50000
+    DQN_EPISODES: int = 60000
     DQN_BATCH_SIZE: int = 512
     DQN_BUFFER_SIZE: int = 200000
     DQN_LR: float = 0.0003
@@ -61,7 +61,7 @@ class Config:
     # ──────────────────────────────────────────────
     # PPO Hyperparameters (2-Qubit Scaled - Optimized)
     # ──────────────────────────────────────────────
-    PPO_EPISODES: int = 50000
+    PPO_EPISODES: int = 60000
     PPO_ROLLOUT_STEPS: int = 4096      # Optimized rollout steps for fast high-capacity CPU training
     PPO_EPOCHS: int = 10               # Gradient epochs per rollout update
     PPO_MINI_BATCH_SIZE: int = 512     # Minibatch size for smooth optimization
