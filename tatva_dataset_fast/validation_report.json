@@ -1,0 +1,39 @@
+{
+  "1qubit": {
+    "files": 10,
+    "total": 1000000,
+    "min_fidelity": 0.9999999999999989,
+    "max_norm_error": 8.881784197001252e-16,
+    "bad_examples": 0,
+    "duplicates_at_1e-12_quantization": 0,
+    "qiskit_verifications": 1000,
+    "qiskit_failures": 0,
+    "gate_counts": {
+      "2": 1000000
+    },
+    "depths": {
+      "2": 1000000
+    },
+    "entangling_gate_counts": {}
+  },
+  "2qubit": {
+    "files": 10,
+    "total": 1000000,
+    "min_fidelity": 0.9999999999999984,
+    "max_norm_error": 8.881784197001252e-16,
+    "bad_examples": 0,
+    "duplicates_at_1e-12_quantization": 0,
+    "qiskit_verifications": 1000,
+    "qiskit_failures": 0,
+    "gate_counts": {
+      "8": 500299,
+      "7": 499701
+    },
+    "depths": {
+      "5": 1000000
+    },
+    "entangling_gate_counts": {
+      "1": 1000000
+    }
+  }
+}

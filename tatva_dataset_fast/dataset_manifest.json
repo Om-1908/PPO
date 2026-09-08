@@ -1,0 +1,16 @@
+{
+  "dataset": "TATVA Training Dataset",
+  "one_qubit_examples": 1000000,
+  "two_qubit_examples": 1000000,
+  "total_examples": 2000000,
+  "format": "HDF5",
+  "shard_size": 100000,
+  "seeds": {
+    "1qubit": 2026090801,
+    "2qubit": 2026090802
+  },
+  "fidelity_threshold": 0.999999,
+  "gate_convention": "Qiskit-compatible little-endian state order [00,01,10,11]; q0 least-significant bit",
+  "synthesis": "1q canonical RY-RZ state preparation; 2q Schmidt decomposition with one CX and local ZYZ Euler decompositions; local gates interleaved for depth minimization",
+  "verification": "Exact equivalent matrix/statevector simulator. Qiskit package is unavailable in this runtime and installation has no network access, so Qiskit Statevector verification itself could not be executed."
+}

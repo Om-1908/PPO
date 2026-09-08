@@ -1,0 +1,125 @@
+{
+  "generator": "TATVA Expert Dataset Generator",
+  "target_dir": "D:\\Tatva-main\\tatva_dataset_fast",
+  "seed": 42,
+  "1qubit": {
+    "total_samples": 1000000,
+    "shards": [
+      {
+        "path": "D:\\Tatva-main\\tatva_dataset_fast\\1qubit\\shard_0.h5",
+        "samples": 100000,
+        "size_mb": 17.11
+      },
+      {
+        "path": "D:\\Tatva-main\\tatva_dataset_fast\\1qubit\\shard_1.h5",
+        "samples": 100000,
+        "size_mb": 17.11
+      },
+      {
+        "path": "D:\\Tatva-main\\tatva_dataset_fast\\1qubit\\shard_2.h5",
+        "samples": 100000,
+        "size_mb": 17.11
+      },
+      {
+        "path": "D:\\Tatva-main\\tatva_dataset_fast\\1qubit\\shard_3.h5",
+        "samples": 100000,
+        "size_mb": 17.11
+      },
+      {
+        "path": "D:\\Tatva-main\\tatva_dataset_fast\\1qubit\\shard_4.h5",
+        "samples": 100000,
+        "size_mb": 17.11
+      },
+      {
+        "path": "D:\\Tatva-main\\tatva_dataset_fast\\1qubit\\shard_5.h5",
+        "samples": 100000,
+        "size_mb": 17.11
+      },
+      {
+        "path": "D:\\Tatva-main\\tatva_dataset_fast\\1qubit\\shard_6.h5",
+        "samples": 100000,
+        "size_mb": 17.11
+      },
+      {
+        "path": "D:\\Tatva-main\\tatva_dataset_fast\\1qubit\\shard_7.h5",
+        "samples": 100000,
+        "size_mb": 17.11
+      },
+      {
+        "path": "D:\\Tatva-main\\tatva_dataset_fast\\1qubit\\shard_8.h5",
+        "samples": 100000,
+        "size_mb": 17.11
+      },
+      {
+        "path": "D:\\Tatva-main\\tatva_dataset_fast\\1qubit\\shard_9.h5",
+        "samples": 100000,
+        "size_mb": 17.11
+      }
+    ],
+    "fidelities": {
+      "min": 0.9999999999999989,
+      "mean": 1.0
+    }
+  },
+  "2qubit": {
+    "total_samples": 1000000,
+    "shards": [
+      {
+        "path": "D:\\Tatva-main\\tatva_dataset_fast\\2qubit\\shard_0.h5",
+        "samples": 100000,
+        "size_mb": 49.64
+      },
+      {
+        "path": "D:\\Tatva-main\\tatva_dataset_fast\\2qubit\\shard_1.h5",
+        "samples": 100000,
+        "size_mb": 49.68
+      },
+      {
+        "path": "D:\\Tatva-main\\tatva_dataset_fast\\2qubit\\shard_2.h5",
+        "samples": 100000,
+        "size_mb": 49.68
+      },
+      {
+        "path": "D:\\Tatva-main\\tatva_dataset_fast\\2qubit\\shard_3.h5",
+        "samples": 100000,
+        "size_mb": 49.64
+      },
+      {
+        "path": "D:\\Tatva-main\\tatva_dataset_fast\\2qubit\\shard_4.h5",
+        "samples": 100000,
+        "size_mb": 49.68
+      },
+      {
+        "path": "D:\\Tatva-main\\tatva_dataset_fast\\2qubit\\shard_5.h5",
+        "samples": 100000,
+        "size_mb": 49.68
+      },
+      {
+        "path": "D:\\Tatva-main\\tatva_dataset_fast\\2qubit\\shard_6.h5",
+        "samples": 100000,
+        "size_mb": 49.68
+      },
+      {
+        "path": "D:\\Tatva-main\\tatva_dataset_fast\\2qubit\\shard_7.h5",
+        "samples": 100000,
+        "size_mb": 49.64
+      },
+      {
+        "path": "D:\\Tatva-main\\tatva_dataset_fast\\2qubit\\shard_8.h5",
+        "samples": 100000,
+        "size_mb": 49.64
+      },
+      {
+        "path": "D:\\Tatva-main\\tatva_dataset_fast\\2qubit\\shard_9.h5",
+        "samples": 100000,
+        "size_mb": 49.64
+      }
+    ],
+    "fidelities": {
+      "min": 0.9999999999999984,
+      "mean": 1.0
+    }
+  },
+  "total_samples": 2000000,
+  "total_time_seconds": 121.61
+}
