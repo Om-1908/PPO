@@ -18,6 +18,7 @@ Strict Verification Protocol:
   6. Asserts max_discrepancy < 1e-10 and fresh_verified_fidelity >= 0.999999 before reporting HIGH_PRECISION_SUCCESS.
 """
 
+import math
 import os
 import sys
 import time
@@ -178,65 +179,122 @@ def prune_and_reoptimize_structural_search(
     target_sv: np.ndarray,
     n_qubits: int = 2,
     target_fidelity: float = 0.999999,
-    max_prune_passes: int = 5
+    max_budget: int = 150
 ) -> Tuple[List[Tuple], float]:
     """
-    Structural Search Engine for Shorter Circuits:
-    Iteratively prunes removable gates from a verified high-precision candidate,
-    re-optimizes continuous parameters, re-simplifies, and re-verifies via fresh Qiskit.
-    Retains pruned circuit ONLY if fresh Qiskit fidelity F >= target_fidelity.
+    Multi-Strategy Structural Optimization Engine:
+    Progressively reduces total gate count while guaranteeing fresh Qiskit F >= target_fidelity.
+    Strategies applied:
+      1. Algebraic commutation & merging
+      2. Single gate deletion (ordered by smallest rotation angle first)
+      3. Consecutive pair deletion
+      4. Continuous multi-start L-BFGS-B parameter re-optimization after EVERY modification
+      5. Fresh Qiskit simulation & verification
     """
-    current_actions = list(actions)
-    current_qc = build_qiskit_circuit(current_actions, n_qubits=n_qubits)
-    current_fid = _fidelity(target_sv, Statevector.from_instruction(current_qc).data)
+    from simplify import multi_start_optimize_parameters, commute_independent_gates
 
-    if current_fid < target_fidelity:
-        return current_actions, current_fid
+    curr_actions = simplify_gate_sequence(actions)
+    curr_actions, curr_fid = multi_start_optimize_parameters(curr_actions, target_sv, n_qubits=n_qubits, target_fidelity=target_fidelity)
+    
+    curr_qc = build_qiskit_circuit(curr_actions, n_qubits=n_qubits)
+    curr_fid = _fidelity(target_sv, Statevector.from_instruction(curr_qc).data)
 
-    for pass_idx in range(max_prune_passes):
-        improved_in_pass = False
-        n_gates = len(current_actions)
+    if curr_fid < target_fidelity:
+        return curr_actions, curr_fid
 
-        for i in range(n_gates):
-            # Try removing gate i
-            candidate_actions = current_actions[:i] + current_actions[i+1:]
-            if not candidate_actions:
+    best_actions = list(curr_actions)
+    best_fid = curr_fid
+
+    attempts = 0
+    improved = True
+
+    while improved and attempts < max_budget:
+        improved = False
+
+        # Strategy 1: Algebraic Commutation & Merging
+        comm_actions = commute_independent_gates(best_actions)
+        simp_comm = simplify_gate_sequence(comm_actions)
+        if len(simp_comm) < len(best_actions):
+            opt_comm, fid_comm = multi_start_optimize_parameters(simp_comm, target_sv, n_qubits=n_qubits, target_fidelity=target_fidelity)
+            qc_comm = build_qiskit_circuit(opt_comm, n_qubits=n_qubits)
+            fresh_fid_comm = _fidelity(target_sv, Statevector.from_instruction(qc_comm).data)
+
+            if fresh_fid_comm >= target_fidelity and len(opt_comm) < len(best_actions):
+                best_actions = opt_comm
+                best_fid = fresh_fid_comm
+                improved = True
                 continue
 
-            # Re-optimize continuous parameters of the candidate sub-sequence
-            opt_actions, opt_fid = optimize_circuit_parameters(candidate_actions, target_sv, n_qubits=n_qubits)
+        # Strategy 2: Single Gate Deletion (Angle-Magnitude Heuristic)
+        n_gates = len(best_actions)
+        deletion_indices = list(range(n_gates))
+        
+        rot_indices = [idx for idx in deletion_indices if best_actions[idx][0] in ('RX', 'RY', 'RZ') and best_actions[idx][2] is not None]
+        non_rot_indices = [idx for idx in deletion_indices if idx not in rot_indices]
+        rot_indices.sort(key=lambda idx: abs(math.fmod(best_actions[idx][2], math.pi)))
+        
+        ordered_indices = rot_indices + non_rot_indices
 
-            # Re-simplify
-            simp_actions = simplify_gate_sequence(opt_actions)
-
-            # Fresh Qiskit re-verification
-            test_qc = build_qiskit_circuit(simp_actions, n_qubits=n_qubits)
-            fresh_sv = Statevector.from_instruction(test_qc).data
-            fresh_fid = _fidelity(target_sv, fresh_sv)
-
-            if fresh_fid >= target_fidelity and len(simp_actions) < len(current_actions):
-                current_actions = simp_actions
-                current_fid = fresh_fid
-                improved_in_pass = True
+        for idx in ordered_indices:
+            attempts += 1
+            if attempts >= max_budget:
                 break
 
-        if not improved_in_pass:
-            break
+            cand_actions = best_actions[:idx] + best_actions[idx+1:]
+            if not cand_actions:
+                continue
 
-    return current_actions, current_fid
+            opt_cand, opt_fid = multi_start_optimize_parameters(cand_actions, target_sv, n_qubits=n_qubits, target_fidelity=target_fidelity)
+            simp_cand = simplify_gate_sequence(opt_cand)
+            opt_cand, opt_fid = multi_start_optimize_parameters(simp_cand, target_sv, n_qubits=n_qubits, target_fidelity=target_fidelity)
+
+            test_qc = build_qiskit_circuit(opt_cand, n_qubits=n_qubits)
+            fresh_fid = _fidelity(target_sv, Statevector.from_instruction(test_qc).data)
+
+            if fresh_fid >= target_fidelity and len(opt_cand) < len(best_actions):
+                best_actions = opt_cand
+                best_fid = fresh_fid
+                improved = True
+                break
+
+        # Strategy 3: Consecutive Pair Deletion
+        if not improved and len(best_actions) > 2:
+            for idx in range(len(best_actions) - 1):
+                attempts += 1
+                if attempts >= max_budget:
+                    break
+
+                cand_actions = best_actions[:idx] + best_actions[idx+2:]
+                if not cand_actions:
+                    continue
+
+                opt_cand, opt_fid = multi_start_optimize_parameters(cand_actions, target_sv, n_qubits=n_qubits, target_fidelity=target_fidelity)
+                simp_cand = simplify_gate_sequence(opt_cand)
+                opt_cand, opt_fid = multi_start_optimize_parameters(simp_cand, target_sv, n_qubits=n_qubits, target_fidelity=target_fidelity)
+
+                test_qc = build_qiskit_circuit(opt_cand, n_qubits=n_qubits)
+                fresh_fid = _fidelity(target_sv, Statevector.from_instruction(test_qc).data)
+
+                if fresh_fid >= target_fidelity and len(opt_cand) < len(best_actions):
+                    best_actions = opt_cand
+                    best_fid = fresh_fid
+                    improved = True
+                    break
+
+    return best_actions, best_fid
 
 
 def candidate_rank_key(cand: Dict, target_fidelity: float = 0.999999) -> Tuple:
     """
     Strict Hierarchical Candidate Ranking Key:
-      1. Satisfies F >= target_fidelity (High precision first)
+      1. Satisfies F >= target_fidelity (High precision first: is_hp = 1)
       2. Lower total gate count
       3. Lower circuit depth
       4. Fewer entangling gates
-      5. Higher fidelity
+      5. Higher fidelity (tie-breaker)
     """
     fid = cand['final_fidelity']
-    is_hp = 1 if fid >= target_fidelity else (1 if fid >= 0.99 else 0)
+    is_hp = 1 if fid >= target_fidelity else 0
     return (
         -is_hp,                           # 1st: High precision candidate first
         cand['final_gate_count'],         # 2nd: Primary Objective (min gates)

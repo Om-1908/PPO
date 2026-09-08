@@ -267,18 +267,24 @@ def run_ppo_synthesis(
 
     final_fid = result['final_fidelity']
     display_lines = result['display_lines']
+    raw_gates = result['raw_gate_count']
     gate_count = result['final_gate_count']
     depth = result['circuit_depth']
+    entangling_count = result['entangling_gate_count']
     status = result['status']
+    gate_reduction = raw_gates - gate_count
+    reduction_pct = (gate_reduction / raw_gates * 100.0) if raw_gates > 0 else 0.0
 
     print("\n" + "=" * 74)
-    print("                      SYNTHESIS RESULTS (PPO ONLY)")
+    print("           TATVA OPTIMIZED SYNTHESIS RESULTS (PPO + STRUCTURAL SEARCH)")
     print("=" * 74)
-    print(f" Status            : {status}")
-    print(f" Final Fidelity    : {final_fid:.10f} ({final_fid * 100:.6f}%)")
-    print(f" Total Gate Count  : {gate_count}")
-    print(f" Circuit Depth     : {depth}")
-    print(f" Search Time       : {elapsed:.2f} seconds")
+    print(f" Status                : {status}")
+    print(f" Final Verified Fidelity: {final_fid:.10f} ({final_fid * 100:.6f}%)")
+    print(f" Raw PPO Gate Count    : {raw_gates}")
+    print(f" Final Optimized Gates : {gate_count} (Reduced by {gate_reduction} gates / {reduction_pct:.2f}%)")
+    print(f" Circuit Depth         : {depth}")
+    print(f" Entangling Gates      : {entangling_count}")
+    print(f" Search & Opt Time     : {elapsed:.2f} seconds")
     print("-" * 74)
 
     if display_lines:
@@ -286,7 +292,7 @@ def run_ppo_synthesis(
         for line in display_lines:
             print(line.replace('θ', 'theta'))
     else:
-        print(" Gate Sequence     : [Identity / Empty Circuit]")
+        print(" Gate Sequence         : [Identity / Empty Circuit]")
 
     print("=" * 74 + "\n")
     return result

@@ -169,6 +169,45 @@ def _fidelity(target_sv: np.ndarray, sv: np.ndarray) -> float:
     """Compute true quantum state fidelity: F = |<target|sv>|^2 using np.vdot(target_sv, sv)."""
     return float(abs(np.vdot(target_sv, sv)) ** 2)
 
+def commute_independent_gates(actions: List[Tuple]) -> List[Tuple]:
+    """
+    Commute independent single-qubit gates on disjoint qubits to bring same-qubit
+    rotations adjacent for algebraic merging.
+    """
+    if len(actions) <= 1:
+        return list(actions)
+
+    current = list(actions)
+    changed = True
+    passes = 0
+
+    while changed and passes < 5:
+        changed = False
+        passes += 1
+        i = 0
+        new_actions = []
+        while i < len(current):
+            if i + 1 < len(current):
+                g1, q1, a1 = current[i]
+                g2, q2, a2 = current[i+1]
+                if (isinstance(q1, int) and isinstance(q2, int) and q1 != q2 and
+                    g1 in ('H', 'X', 'Y', 'Z', 'S', 'Sdg', 'T', 'Tdg', 'RX', 'RY', 'RZ') and
+                    g2 in ('H', 'X', 'Y', 'Z', 'S', 'Sdg', 'T', 'Tdg', 'RX', 'RY', 'RZ')):
+                    if i + 2 < len(current):
+                        g3, q3, a3 = current[i+2]
+                        if q1 == q3 and g1 == g3 and g1 in ('RX', 'RY', 'RZ'):
+                            new_actions.append((g2, q2, a2))
+                            new_actions.append((g1, q1, a1))
+                            i += 2
+                            changed = True
+                            continue
+            new_actions.append(current[i])
+            i += 1
+        current = new_actions
+
+    return current
+
+
 def optimize_circuit_parameters(
     actions: List[Tuple],
     target_sv: np.ndarray,
@@ -183,7 +222,6 @@ def optimize_circuit_parameters(
         fid = _fidelity(target_sv, init_sv)
         return [], fid
 
-    # Identify indices of parameterized rotation gates
     param_indices = [idx for idx, (g, _, a) in enumerate(actions) if g in ('RX', 'RY', 'RZ') and a is not None]
 
     if not param_indices:
@@ -213,6 +251,47 @@ def optimize_circuit_parameters(
     opt_sv = simulate_actions(opt_actions, n_qubits)
     opt_fid = _fidelity(target_sv, opt_sv)
     return opt_actions, opt_fid
+
+
+def multi_start_optimize_parameters(
+    actions: List[Tuple],
+    target_sv: np.ndarray,
+    n_qubits: int = 2,
+    target_fidelity: float = 0.999999,
+    restarts: int = 3
+) -> Tuple[List[Tuple], float]:
+    """
+    Continuous parameter optimization with multi-start restarts if initial optimization
+    does not hit target fidelity threshold.
+    """
+    opt_actions, opt_fid = optimize_circuit_parameters(actions, target_sv, n_qubits=n_qubits, max_iter=150)
+
+    if opt_fid >= target_fidelity or restarts <= 0:
+        return opt_actions, opt_fid
+
+    param_indices = [idx for idx, (g, _, a) in enumerate(actions) if g in ('RX', 'RY', 'RZ') and a is not None]
+    if not param_indices:
+        return opt_actions, opt_fid
+
+    best_actions = opt_actions
+    best_fid = opt_fid
+    base_angles = [opt_actions[idx][2] for idx in param_indices]
+
+    for trial in range(restarts):
+        pert_actions = list(actions)
+        for i, idx in enumerate(param_indices):
+            g, q, _ = pert_actions[idx]
+            noise = np.random.uniform(-0.15, 0.15)
+            pert_actions[idx] = (g, q, base_angles[i] + noise)
+
+        test_actions, test_fid = optimize_circuit_parameters(pert_actions, target_sv, n_qubits=n_qubits, max_iter=150)
+        if test_fid > best_fid:
+            best_fid = test_fid
+            best_actions = test_actions
+            if best_fid >= target_fidelity:
+                break
+
+    return best_actions, best_fid
 
 def verify_synthesis_candidate(
     target_sv: np.ndarray,
