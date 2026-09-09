@@ -1,0 +1,129 @@
+{
+  "timestamp": "2026-09-09T21:12:16",
+  "total_files": 17,
+  "total_size_mb": 496.71,
+  "dataset_directory": "D:\\Tatva-main\\tatva_dataset_fast\\2qubit",
+  "checkpoint_directory": "D:\\Tatva-main\\saved_models\\2qubit\\dqn_model.pth",
+  "log_directory": "D:\\Tatva-main\\logs\\2qubit",
+  "assets": [
+    {
+      "path": "D:\\Tatva-main\\tatva_dataset_fast\\2qubit\\shard_0.h5",
+      "size_bytes": 52055603,
+      "size_mb": 49.64,
+      "modified_at": "2026-09-08T02:04:31",
+      "sha256": "a8e2b735cd3ddbb530e484d4bd6e21c0469bfc11658ed13ad7b99678ab065a72"
+    },
+    {
+      "path": "D:\\Tatva-main\\tatva_dataset_fast\\2qubit\\shard_1.h5",
+      "size_bytes": 52088232,
+      "size_mb": 49.68,
+      "modified_at": "2026-09-08T02:04:40",
+      "sha256": "bb04518a423f81288d89d2282a40870c45763917b7c26f411af20d00eb908bc6"
+    },
+    {
+      "path": "D:\\Tatva-main\\tatva_dataset_fast\\2qubit\\shard_2.h5",
+      "size_bytes": 52088100,
+      "size_mb": 49.68,
+      "modified_at": "2026-09-08T02:04:50",
+      "sha256": "5f3ac79777493a762489baec304ea18646d068be0a8da1c184b155ffa049a4a2"
+    },
+    {
+      "path": "D:\\Tatva-main\\tatva_dataset_fast\\2qubit\\shard_3.h5",
+      "size_bytes": 52055389,
+      "size_mb": 49.64,
+      "modified_at": "2026-09-08T02:04:59",
+      "sha256": "5540ccf9c85211601ef3f747ae009208391a9dc36400648d52e90bfa60999f8f"
+    },
+    {
+      "path": "D:\\Tatva-main\\tatva_dataset_fast\\2qubit\\shard_4.h5",
+      "size_bytes": 52088261,
+      "size_mb": 49.68,
+      "modified_at": "2026-09-08T02:05:09",
+      "sha256": "a243685a93a5308d744f09f572bce2c17c18c8ccc9c41249006f916a87d979a2"
+    },
+    {
+      "path": "D:\\Tatva-main\\tatva_dataset_fast\\2qubit\\shard_5.h5",
+      "size_bytes": 52088294,
+      "size_mb": 49.68,
+      "modified_at": "2026-09-08T02:05:20",
+      "sha256": "0e28b43c495de7fbad99d0ddf047fd9dd4b7c78240b93980d85f6f23c59698bb"
+    },
+    {
+      "path": "D:\\Tatva-main\\tatva_dataset_fast\\2qubit\\shard_6.h5",
+      "size_bytes": 52088164,
+      "size_mb": 49.68,
+      "modified_at": "2026-09-08T02:05:29",
+      "sha256": "7b7fc1e9fa78a45ac8951a5d471d9f0b8720841fa43b8976bbb4e8cb7d521725"
+    },
+    {
+      "path": "D:\\Tatva-main\\tatva_dataset_fast\\2qubit\\shard_7.h5",
+      "size_bytes": 52055649,
+      "size_mb": 49.64,
+      "modified_at": "2026-09-08T02:05:39",
+      "sha256": "e08235bbf749187674a111d06373e0b96e971a4e43ac18ecbbb4ff0d87fa590d"
+    },
+    {
+      "path": "D:\\Tatva-main\\tatva_dataset_fast\\2qubit\\shard_8.h5",
+      "size_bytes": 52054774,
+      "size_mb": 49.64,
+      "modified_at": "2026-09-08T02:05:48",
+      "sha256": "cc6490525bd7e907bd00cc16607a8220e8ce3d3bfdb8f127cdde76ee03501c52"
+    },
+    {
+      "path": "D:\\Tatva-main\\tatva_dataset_fast\\2qubit\\shard_9.h5",
+      "size_bytes": 52055705,
+      "size_mb": 49.64,
+      "modified_at": "2026-09-08T02:05:57",
+      "sha256": "ce11692acc3c3f4044744fcbb83ef0488f93e8344648686cc980fdce7df3c249"
+    },
+    {
+      "path": "D:\\Tatva-main\\quantumrl\\offline_train_dqn.py",
+      "size_bytes": 42286,
+      "size_mb": 0.04,
+      "modified_at": "2026-09-09T19:48:09",
+      "sha256": "7eb84e3ce977c0e7e38df2ee3ea2ee2b3c611c82e638cc80dfb03a5a58600a65"
+    },
+    {
+      "path": "D:\\Tatva-main\\quantumrl\\configs\\config_2qubit.py",
+      "size_bytes": 7626,
+      "size_mb": 0.01,
+      "modified_at": "2026-09-09T19:47:30",
+      "sha256": "699f2d09e205649e86b765ee8dae2ba88fb93cdeef1c0e9d5283d9e7d8e7593e"
+    },
+    {
+      "path": "D:\\Tatva-main\\quantumrl\\dqn_agent.py",
+      "size_bytes": 11833,
+      "size_mb": 0.01,
+      "modified_at": "2026-09-09T19:47:53",
+      "sha256": "9a8bf69032a42c9153be671f901e36a160e0764eb756fe5d55deff96e34e370e"
+    },
+    {
+      "path": "D:\\Tatva-main\\quantumrl\\quantum_env.py",
+      "size_bytes": 20656,
+      "size_mb": 0.02,
+      "modified_at": "2026-09-09T15:22:50",
+      "sha256": "8dd9049a981d2de37df3955f871b1056f521efd46fca9655ddada4050912d3f8"
+    },
+    {
+      "path": "D:\\Tatva-main\\quantumrl\\pretrain.py",
+      "size_bytes": 10662,
+      "size_mb": 0.01,
+      "modified_at": "2026-09-08T09:52:52",
+      "sha256": "deec4c2ef59a3590adb06db8fae42af37ca1246f0ce117e39e1d86fb599c836c"
+    },
+    {
+      "path": "D:\\Tatva-main\\quantumrl\\simplify.py",
+      "size_bytes": 13642,
+      "size_mb": 0.01,
+      "modified_at": "2026-09-09T00:50:35",
+      "sha256": "d280c0429a63609c2ad2e072dd78ce591c25b1bc6518a893610e21bd358a232e"
+    },
+    {
+      "path": "D:\\Tatva-main\\quantumrl\\utils.py",
+      "size_bytes": 14151,
+      "size_mb": 0.01,
+      "modified_at": "2026-09-09T09:53:39",
+      "sha256": "723b438ac20d47953c2bf9ef4c892b215db41a4320361a0091df5bb7993255bd"
+    }
+  ]
+}
