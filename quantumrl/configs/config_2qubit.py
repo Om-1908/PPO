@@ -48,8 +48,9 @@ class Config:
     # ──────────────────────────────────────────────
     # DQN Hyperparameters (2-Qubit Scaled + Dueling + PER)
     # ──────────────────────────────────────────────
-    DQN_EPISODES: int = 500000    # EXACTLY 500,000 synthesis episodes
-    DQN_BATCH_SIZE: int = 512
+    DQN_EPISODES: int = 200000    # Target 200,000 synthesis episodes
+    NUM_PARALLEL_ENVS: int = 256  # 256 Vectorized CUDA environments stepped simultaneously in VRAM
+    DQN_BATCH_SIZE: int = 1024    # Optimal batch size balancing Tensor Core acceleration and CPU throughput
     DQN_BUFFER_SIZE: int = 200000
     DQN_LR: float = 0.0003
     DQN_GAMMA: float = 0.995
@@ -60,6 +61,7 @@ class Config:
     DQN_HIDDEN_SIZE: int = 768
     DQN_WARMUP_STEPS: int = 10000
     DQN_UPDATE_FREQ: int = 4
+    BEST_CHECKPOINT_EVAL_INTERVAL: int = 5000
 
     # Prioritized Experience Replay (PER)
     PER_ALPHA: float = 0.6

@@ -197,6 +197,7 @@ class DQNAgent:
         self.target_net.eval()
 
         self.optimizer = torch.optim.Adam(self.q_net.parameters(), lr=config.DQN_LR)
+        self.scaler = torch.cuda.amp.GradScaler(enabled=self.device.type == 'cuda')
 
         alpha = getattr(config, 'PER_ALPHA', 0.6)
         beta_start = getattr(config, 'PER_BETA_START', 0.4)
@@ -217,13 +218,26 @@ class DQNAgent:
         if random.random() < self.epsilon:
             return random.randrange(self.action_size)
 
-        state_t = torch.tensor(state, dtype=torch.float32, device=self.device).unsqueeze(0)
+        state_t = torch.as_tensor(state, dtype=torch.float32, device=self.device).unsqueeze(0)
         with torch.no_grad():
             q_values = self.q_net(state_t)
         return int(q_values.argmax(dim=1).item())
 
+    def select_actions_batch(self, state_tensor: torch.Tensor) -> torch.Tensor:
+        """Batch ε-greedy action selection for parallel environments on CUDA VRAM."""
+        num_envs = state_tensor.shape[0]
+        rand_mask = torch.rand(num_envs, device=self.device) < self.epsilon
+        random_actions = torch.randint(0, self.action_size, (num_envs,), device=self.device)
+
+        with torch.no_grad():
+            q_values = self.q_net(state_tensor)
+            greedy_actions = q_values.argmax(dim=1)
+
+        actions = torch.where(rand_mask, random_actions, greedy_actions)
+        return actions
+
     def update(self) -> Optional[float]:
-        """Sample a prioritized mini-batch and perform Double-DQN step."""
+        """Sample a prioritized mini-batch and perform Double-DQN step on GPU with AMP."""
         if len(self.buffer) < self.config.DQN_BATCH_SIZE:
             return None
 
@@ -231,33 +245,36 @@ class DQNAgent:
             self.config.DQN_BATCH_SIZE
         )
 
-        states_t = torch.tensor(states, dtype=torch.float32, device=self.device)
-        actions_t = torch.tensor(actions, dtype=torch.long, device=self.device).unsqueeze(1)
-        rewards_t = torch.tensor(rewards, dtype=torch.float32, device=self.device).unsqueeze(1)
-        next_states_t = torch.tensor(next_states, dtype=torch.float32, device=self.device)
-        dones_t = torch.tensor(dones, dtype=torch.float32, device=self.device).unsqueeze(1)
-        weights_t = torch.tensor(weights, dtype=torch.float32, device=self.device).unsqueeze(1)
+        states_t = torch.as_tensor(states, dtype=torch.float32, device=self.device)
+        actions_t = torch.as_tensor(actions, dtype=torch.long, device=self.device).unsqueeze(1)
+        rewards_t = torch.as_tensor(rewards, dtype=torch.float32, device=self.device).unsqueeze(1)
+        next_states_t = torch.as_tensor(next_states, dtype=torch.float32, device=self.device)
+        dones_t = torch.as_tensor(dones, dtype=torch.float32, device=self.device).unsqueeze(1)
+        weights_t = torch.as_tensor(weights, dtype=torch.float32, device=self.device).unsqueeze(1)
 
-        # Current Q-values: Q(s, a)
-        current_q = self.q_net(states_t).gather(1, actions_t)
+        with torch.cuda.amp.autocast(enabled=self.device.type == 'cuda'):
+            # Current Q-values: Q(s, a)
+            current_q = self.q_net(states_t).gather(1, actions_t)
 
-        # Double DQN target evaluation
-        with torch.no_grad():
-            best_actions = self.q_net(next_states_t).argmax(dim=1, keepdim=True)
-            max_next_q = self.target_net(next_states_t).gather(1, best_actions)
-            target_q = rewards_t + self.config.DQN_GAMMA * max_next_q * (1.0 - dones_t)
+            # Double DQN target evaluation
+            with torch.no_grad():
+                best_actions = self.q_net(next_states_t).argmax(dim=1, keepdim=True)
+                max_next_q = self.target_net(next_states_t).gather(1, best_actions)
+                target_q = rewards_t + self.config.DQN_GAMMA * max_next_q * (1.0 - dones_t)
+
+            # Weighted MSE loss
+            loss = (weights_t * F.mse_loss(current_q, target_q, reduction='none')).mean()
 
         # TD errors for PER update
         td_errors = (current_q - target_q).detach().cpu().numpy().squeeze()
         self.buffer.update_priorities(indices, td_errors)
 
-        # Weighted MSE loss
-        loss = (weights_t * F.mse_loss(current_q, target_q, reduction='none')).mean()
-
         self.optimizer.zero_grad()
-        loss.backward()
+        self.scaler.scale(loss).backward()
+        self.scaler.unscale_(self.optimizer)
         torch.nn.utils.clip_grad_norm_(self.q_net.parameters(), max_norm=10.0)
-        self.optimizer.step()
+        self.scaler.step(self.optimizer)
+        self.scaler.update()
 
         self.steps_done += 1
         return loss.item()
@@ -281,7 +298,12 @@ class DQNAgent:
 
     def load(self, path: str) -> None:
         """Load network weights from disk."""
-        state_dict = torch.load(path, map_location=self.device)
-        self.q_net.load_state_dict(state_dict)
+        ckpt = torch.load(path, map_location=self.device)
+        if isinstance(ckpt, dict) and 'q_net' in ckpt:
+            self.q_net.load_state_dict(ckpt['q_net'])
+            if hasattr(self, 'target_net'):
+                self.target_net.load_state_dict(ckpt.get('target_net', ckpt['q_net']))
+        else:
+            self.q_net.load_state_dict(ckpt)
         self.q_net.eval()
         print(f"[DQNAgent] Model loaded <- {path}")

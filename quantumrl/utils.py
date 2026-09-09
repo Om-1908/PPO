@@ -36,7 +36,8 @@ def compute_fidelity(target_sv: np.ndarray, current_sv: np.ndarray) -> float:
     -------
     float in [0, 1]
     """
-    return float(abs(np.dot(target_sv.conj(), current_sv)) ** 2)
+    return float(abs(np.vdot(target_sv, current_sv)) ** 2)
+
 
 
 def generate_random_statevector(n_qubits: int, seed: Optional[int] = None) -> np.ndarray:

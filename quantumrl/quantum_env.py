@@ -358,8 +358,8 @@ class QuantumCircuitEnv(gymnasium.Env):
         fidelity = compute_fidelity(self.target_sv, self.current_sv)
         self.steps += 1
 
-        # Hybrid continuous parameter refinement when candidate gate sequence gets close
-        if fidelity >= 0.80 and self.steps >= 3:
+        # Hybrid continuous parameter refinement when enabled (disabled during RL step loop for maximum speed)
+        if getattr(self, 'enable_inloop_refinement', False) and fidelity >= 0.80 and self.steps >= 3:
             try:
                 from simplify import optimize_circuit_parameters, simulate_actions
                 opt_actions, opt_fid = optimize_circuit_parameters(
